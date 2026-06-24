@@ -28,7 +28,7 @@
 | **張開手掌 (Open Hand)** | **空間旋轉模式** | 移動手掌位置可控制 3D 模型的 X/Y 軸旋轉。 |
 | **握拳狀態 (Fist)** | **深度縮放模式** | 保持握拳，**靠近鏡頭**模型變大；**遠離鏡頭**模型變小（支援範圍 $0.1 \times \sim 2.4 \times$）。 |
 
-### 🎛️ UI 控制面板 & 快捷鍵
+### UI 控制面板 & 快捷鍵
 * **3D Particle Shape**：支援五種高精細度模型切換：
   * `Brilliant Christmas Tree` (聖誕樹)
   * `Mysterious Saturn` (土星與星環)
