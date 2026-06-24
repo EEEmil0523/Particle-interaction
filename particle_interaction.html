@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Single-Hand Particle Interaction System - Fixed Version</title>
+  <style>
+    :root {
+      --bg-color: rgba(20, 20, 20, 0.75);
+      --text-color: #ffffff;
+      --accent-color: #00ffcc;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #050505;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text-color);
+    }
+
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    #webcam {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 180px;
+      height: 135px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid var(--accent-color);
+      transform: scaleX(-1);
+      z-index: 10;
+      background: #000;
+    }
+
+    .ui-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      background: var(--bg-color);
+      backdrop-filter: blur(12px);
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 300px;
+      pointer-events: auto;
+    }
+
+    .ui-panel h2 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      letter-spacing: 1px;
+      color: var(--accent-color);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-header-title {
+      flex: 1;
+    }
+
+    .minimize-btn {
+      background: none;
+      border: none;
+      color: var(--accent-color);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    .minimize-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .ui-panel.minimized {
+      width: auto;
+      padding: 12px 16px;
+    }
+
+    .ui-panel.minimized .control-group,
+    .ui-panel.minimized .status-box {
+      display: none;
+    }
+
+    .ui-panel.minimized h2 {
+      margin: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .control-group { margin-bottom: 20px; }
+
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 8px;
+      color: #aaa;
+    }
+
+    select {
+      width: 100%;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    option {
+      background: #222;
+      color: #fff;
+    }
+
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      background: none;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 50%;
+    }
+
+    .status-box {
+      font-size: 13px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      border-left: 4px solid #fff;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .status-box.active {
+      border-left-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+
+    .top-right-controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+
+    .btn {
+      background: var(--bg-color);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 16px;
+      z-index: 100;
+      background: rgba(0,0,0,0.85);
+      padding: 15px 30px;
+      border-radius: 30px;
+      border: 1px solid var(--accent-color);
+      max-width: 80vw;
+      text-align: center;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <div id="loading">Loading particle system and camera...</div>
+  <div id="canvas-container"></div>
+
+  <video id="webcam" autoplay playsinline muted></video>
+
+  <div class="ui-panel">
+    <h2>
+      <span class="panel-header-title">Particle Control Center</span>
+      <button class="minimize-btn" id="minimize-btn" title="Minimize">−</button>
+    </h2>
+
+    <div class="control-group">
+      <label>3D Particle Shape</label>
+      <select id="model-select">
+        <option value="tree">Brilliant Christmas Tree (Xmas Tree)</option>
+        <option value="saturn">Mysterious Saturn (Saturn)</option>
+        <option value="heart">Romantic Heart (Heart)</option>
+        <option value="cube">Geometric Cube (Cube)</option>
+        <option value="dna">DNA Double Helix (DNA)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Particle Color Adjustment</label>
+      <div class="color-picker-wrapper">
+        <input type="color" id="particle-color" value="#00ffcc" />
+        <span id="color-hex">#00ffcc</span>
+      </div>
+    </div>
+
+    <div class="status-box" id="gesture-status">
+      Particles displayed. Waiting for camera permission...
+    </div>
+  </div>
+
+  <div class="top-right-controls">
+    <button class="btn" id="btn-fullscreen">Fullscreen Mode</button>
+  </div>
+
+  <script>
+    let scene, camera, renderer, controls;
+    let particleGeometry, particleSystem;
+
+    // Originally 80000 was too heavy for many computers, using 35000 instead, effect is still obvious.
+    const PARTICLE_COUNT = 35000;
+
+    const targetPositions = {
+      heart: new Float32Array(PARTICLE_COUNT * 3),
+      saturn: new Float32Array(PARTICLE_COUNT * 3),
+      tree: new Float32Array(PARTICLE_COUNT * 3),
+      cube: new Float32Array(PARTICLE_COUNT * 3),
+      dna: new Float32Array(PARTICLE_COUNT * 3)
+    };
+
+    let currentModel = "tree";
+    let gestureScale = 1.0;
+    let targetGestureScale = 1.0;
+    let targetRotationX = 0;
+    let targetRotationY = 0;
+
+    // Make scale=1 so the particle body approaches 80% of the visual space on the screen.
+    const BASE_MODEL_SCALE = 1.75;
+    const MIN_GESTURE_SCALE = 0.1;
+    const MAX_GESTURE_SCALE = 2.4;
+    const PALM_SIZE_MIN = 0.11;
+    const PALM_SIZE_MAX = 0.28;
+    const PALM_SIZE_SCALE_ONE = 0.1547368421;
+
+    function mapPalmSizeToScale(palmSize) {
+      if (palmSize <= PALM_SIZE_SCALE_ONE) {
+        return THREE.MathUtils.mapLinear(
+          palmSize,
+          PALM_SIZE_MIN,
+          PALM_SIZE_SCALE_ONE,
+          MIN_GESTURE_SCALE,
+          1.0
+        );
+      }
+
+      return THREE.MathUtils.mapLinear(
+        palmSize,
+        PALM_SIZE_SCALE_ONE,
+        PALM_SIZE_MAX,
+        1.0,
+        MAX_GESTURE_SCALE
+      );
+    }
+
+    // === 輔助函數：DNA 旋轉 ===
+    function applyDnaRotation(x, y, z, rotZ, rotY) {
+      // 繞 Y 軸旋轉
+      const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+      const x1 = x * cosY - z * sinY;
+      const z1 = x * sinY + z * cosY;
+      // 繞 Z 軸旋轉
+      const cosZ = Math.cos(rotZ), sinZ = Math.sin(rotZ);
+      const x2 = x1 * cosZ - y * sinZ;
+      const y2 = x1 * sinZ + y * cosZ;
+      return [x2, y2, z1];
+    }
+
+    function generateModelPositions() {
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+
+        // 1. Christmas Tree
+        if (i < PARTICLE_COUNT * 0.08) {
+          const angle = Math.random() * Math.PI * 2;
+          const starWave = Math.abs(Math.sin(angle * 5));
+          const r = (1.8 + starWave * 3.0) * Math.sqrt(Math.random());
+          targetPositions.tree[i3] = r * Math.cos(angle);
+          targetPositions.tree[i3 + 1] = 20 + (Math.random() - 0.5) * 1.5;
+          targetPositions.tree[i3 + 2] = r * Math.sin(angle) * 0.45;
+        } else if (i < PARTICLE_COUNT * 0.92) {
+          const h = Math.random() * 32 - 14;
+          const layerNormalized = (h + 14) / 32;
+          const layerProgress = (layerNormalized * 4) % 1.0;
+          let baseRadius = (1.0 - layerNormalized) * 18;
+          baseRadius *= Math.pow(layerProgress, 0.42);
+          const angle = Math.random() * Math.PI * 2;
+          const r = Math.max(0, baseRadius * Math.sqrt(Math.random()) + (Math.random() - 0.5) * 2.5);
+          targetPositions.tree[i3] = Math.cos(angle) * r;
+          targetPositions.tree[i3 + 1] = h;
+          targetPositions.tree[i3 + 2] = Math.sin(angle) * r;
+        } else {
+          const h = Math.random() * 5 - 19;
+          const r = Math.random() * 2.2;
+          const angle = Math.random() * Math.PI * 2;
+          targetPositions.tree[i3] = Math.cos(angle) * r;
+          targetPositions.tree[i3 + 1] = h;
+          targetPositions.tree[i3 + 2] = Math.sin(angle) * r;
+        }
+
+        // 2. Saturn
+        if (i < PARTICLE_COUNT * 0.42) {
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const latFlatten = 0.82 + Math.random() * 0.06;
+          const r = 11.5 * Math.cbrt(Math.random());
+          targetPositions.saturn[i3] = r * Math.sin(phi) * Math.cos(theta);
+          targetPositions.saturn[i3 + 1] = r * Math.sin(phi) * Math.sin(theta) * latFlatten;
+          targetPositions.saturn[i3 + 2] = r * Math.cos(phi);
+        } else {
+          const ringBand = Math.random();
+          const bandBase =
+            ringBand < 0.22 ? 14.5 :
+            ringBand < 0.48 ? 18.5 :
+            ringBand < 0.72 ? 23.5 :
+            28.5;
+          const rRing = bandBase + Math.random() * 3.5 + Math.sin(bandBase * 1.7 + i * 0.013) * 0.9;
+          const thetaRing = Math.random() * Math.PI * 2;
+          const ringRipple = Math.sin(thetaRing * 10 + rRing * 0.9) * 0.45 + Math.sin(thetaRing * 23) * 0.18;
+          const ringThickness = (Math.random() - 0.5) * (0.45 + ringBand * 0.85);
+          targetPositions.saturn[i3] = (rRing + ringRipple) * Math.cos(thetaRing);
+          targetPositions.saturn[i3 + 1] = ringThickness;
+          targetPositions.saturn[i3 + 2] = (rRing + ringRipple) * Math.sin(thetaRing);
+        }
+
+        // 3. Heart
+        const t = Math.PI * 2 * Math.random();
+        const u = Math.PI * (Math.random() - 0.5);
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+        const z = 6 * Math.sin(u) * (1 - Math.abs(Math.sin(t)));
+        targetPositions.heart[i3] = x * 1.35;
+        targetPositions.heart[i3 + 1] = y * 1.35;
+        targetPositions.heart[i3 + 2] = z * 1.35;
+
+        // 4. Cube
+        const cubeSize = 24;
+        targetPositions.cube[i3] = (Math.random() - 0.5) * cubeSize;
+        targetPositions.cube[i3 + 1] = (Math.random() - 0.5) * cubeSize;
+        targetPositions.cube[i3 + 2] = (Math.random() - 0.5) * cubeSize;
+
+        if (i < PARTICLE_COUNT * 0.50) {
+          const isChainA = i < PARTICLE_COUNT * 0.25;
+          const progress = isChainA 
+            ? (i / (PARTICLE_COUNT * 0.25)) 
+            : ((i - PARTICLE_COUNT * 0.25) / (PARTICLE_COUNT * 0.25));
+          
+          const length = 65;
+          const xRaw = (progress - 0.5) * length;
+          
+          const turns = 3.5;
+          const baseAngle = progress * turns * Math.PI * 2;
+          const angle = isChainA ? baseAngle : baseAngle + 2.3; 
+          
+          const radius = 6.5;
+          const rOffset = (Math.random() - 0.5) * 1.5;
+          const aOffset = (Math.random() - 0.5) * 0.2;
+          
+          let yRaw = Math.cos(angle + aOffset) * (radius + rOffset);
+          let zRaw = Math.sin(angle + aOffset) * (radius + rOffset);
+          
+          yRaw += Math.sin(progress * Math.PI) * 2.5;
+
+          const [finalX, finalY, finalZ] = applyDnaRotation(xRaw, yRaw, zRaw, -0.4, 0.3);
+          
+          targetPositions.dna[i3] = finalX;
+          targetPositions.dna[i3 + 1] = finalY;
+          targetPositions.dna[i3 + 2] = finalZ;
+
+        } else if (i < PARTICLE_COUNT * 0.75) {
+          const progress = (i - PARTICLE_COUNT * 0.50) / (PARTICLE_COUNT * 0.25);
+          
+          const stepCount = 28;
+          const stepIndex = Math.floor(Math.random() * stepCount);
+          const stepProgress = stepIndex / (stepCount - 1);
+          
+          const length = 65;
+          const xRaw = (stepProgress - 0.5) * length;
+          
+          const turns = 3.5;
+          const angleA = stepProgress * turns * Math.PI * 2;
+          const angleB = angleA + 2.3;
+          
+          const radius = 6.5;
+          const spineWave = Math.sin(stepProgress * Math.PI) * 2.5;
+
+          const yA = Math.cos(angleA) * radius + spineWave;
+          const zA = Math.sin(angleA) * radius;
+          const yB = Math.cos(angleB) * radius + spineWave;
+          const zB = Math.sin(angleB) * radius;
+          
+          let t = Math.random();
+          if (t > 0.47 && t < 0.53) {
+            t += (Math.random() > 0.5 ? 0.06 : -0.06);
+          }
+          
+          const noiseX = (Math.random() - 0.5) * 0.5;
+          const noiseY = (Math.random() - 0.5) * 0.8;
+          const noiseZ = (Math.random() - 0.5) * 0.5;
+          
+          const yRaw = THREE.MathUtils.lerp(yA, yB, t) + noiseY;
+          const zRaw = THREE.MathUtils.lerp(zA, zB, t) + noiseZ;
+          
+          const [finalX, finalY, finalZ] = applyDnaRotation(xRaw + noiseX, yRaw, zRaw, -0.4, 0.3);
+          
+          targetPositions.dna[i3] = finalX;
+          targetPositions.dna[i3 + 1] = finalY;
+          targetPositions.dna[i3 + 2] = finalZ;
+        } else {
+          // 剩余粒子隨機分配到 DNA 的各個位置（作為額外的主鏈粒子散射）
+          const extraProgress = Math.random();
+          const length = 65;
+          const xRaw = (extraProgress - 0.5) * length;
+          
+          const turns = 3.5;
+          const baseAngle = extraProgress * turns * Math.PI * 2;
+          const isChainA = Math.random() > 0.5;
+          const angle = isChainA ? baseAngle : baseAngle + 2.3;
+          
+          const radius = 6.5;
+          const rOffset = (Math.random() - 0.5) * 2.5; // 更大的偏移讓粒子更分散
+          const aOffset = (Math.random() - 0.5) * 0.3;
+          
+          let yRaw = Math.cos(angle + aOffset) * (radius + rOffset);
+          let zRaw = Math.sin(angle + aOffset) * (radius + rOffset);
+          
+          yRaw += Math.sin(extraProgress * Math.PI) * 2.5;
+          
+          const [finalX, finalY, finalZ] = applyDnaRotation(xRaw, yRaw, zRaw, -0.4, 0.3);
+          
+          targetPositions.dna[i3] = finalX;
+          targetPositions.dna[i3 + 1] = finalY;
+          targetPositions.dna[i3 + 2] = finalZ;
+        }
+      }
+    }
+
+    function initThree() {
+      const container = document.getElementById("canvas-container");
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x050505, 0.012);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 5, 58);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      generateModelPositions();
+
+      particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(new Float32Array(targetPositions.tree), 3)
+      );
+
+      const material = new THREE.PointsMaterial({
+        size: 0.34,
+        color: new THREE.Color(document.getElementById("particle-color").value),
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true
+      });
+
+      particleSystem = new THREE.Points(particleGeometry, material);
+      scene.add(particleSystem);
+
+      window.addEventListener("resize", onWindowResize);
+    }
+
+    function initWebcamAndAI() {
+      const videoElement = document.getElementById("webcam");
+      const statusBox = document.getElementById("gesture-status");
+      const loadingText = document.getElementById("loading");
+
+      if (!window.Hands || !window.Camera) {
+        loadingText.textContent = "MediaPipe loading failed: please check your internet or refresh the page. Particles are still working.";
+        statusBox.textContent = "AI gesture library failed to load, but particle system is running.";
+        setTimeout(() => loadingText.remove(), 3000);
+        return;
+      }
+
+      const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      hands.onResults((results) => {
+        if (loadingText && document.body.contains(loadingText)) {
+          loadingText.style.opacity = "0";
+          setTimeout(() => loadingText.remove(), 500);
+        }
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          statusBox.classList.add("active");
+
+          const hand1 = results.multiHandLandmarks[0];
+          const wrist = hand1[0];
+          const thumbTip = hand1[4];
+          const thumbIP = hand1[3];
+          const indexMcp = hand1[5];
+          const indexPip = hand1[6];
+          const indexTip = hand1[8];
+          const middlePip = hand1[10];
+          const middleTip = hand1[12];
+          const ringPip = hand1[14];
+          const middleBase = hand1[9];
+          const ringTip = hand1[16];
+          const pinkyPip = hand1[18];
+          const pinkyTip = hand1[20];
+
+          const palmSize = Math.hypot(wrist.x - middleBase.x, wrist.y - middleBase.y) || 0.08;
+          const palmCenterX = (wrist.x + middleBase.x) * 0.5;
+          const palmCenterY = (wrist.y + middleBase.y) * 0.5;
+
+          const fingertipSpread =
+            (
+              Math.hypot(thumbTip.x - palmCenterX, thumbTip.y - palmCenterY) +
+              Math.hypot(indexTip.x - palmCenterX, indexTip.y - palmCenterY) +
+              Math.hypot(middleTip.x - palmCenterX, middleTip.y - palmCenterY) +
+              Math.hypot(ringTip.x - palmCenterX, ringTip.y - palmCenterY) +
+              Math.hypot(pinkyTip.x - palmCenterX, pinkyTip.y - palmCenterY)
+            ) / 5;
+
+          const openness = fingertipSpread / palmSize;
+
+          const thumbCurled =
+            Math.hypot(thumbTip.x - palmCenterX, thumbTip.y - palmCenterY) <
+            Math.hypot(thumbIP.x - palmCenterX, thumbIP.y - palmCenterY) * 1.1;
+          const indexCurled = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y) < Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y) * 1.08;
+          const middleCurled = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y) < Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y) * 1.08;
+          const ringCurled = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y) < Math.hypot(ringPip.x - wrist.x, ringPip.y - wrist.y) * 1.08;
+          const pinkyCurled = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y) < Math.hypot(pinkyPip.x - wrist.x, pinkyPip.y - wrist.y) * 1.12;
+          const curledCount = [indexCurled, middleCurled, ringCurled, pinkyCurled].filter(Boolean).length;
+          const isFist = openness < 1.72 && thumbCurled && curledCount >= 3;
+
+          const handCenterX = (wrist.x + middleBase.x + hand1[5].x + hand1[17].x) * 0.25;
+          const handCenterY = (wrist.y + middleBase.y + hand1[5].y + hand1[17].y) * 0.25;
+          targetRotationY = -(handCenterX - 0.5) * Math.PI * 1.8;
+          targetRotationX = (handCenterY - 0.5) * Math.PI * 1.1;
+
+          if (isFist) {
+            const distanceScale = mapPalmSizeToScale(palmSize);
+            targetGestureScale = THREE.MathUtils.clamp(distanceScale, MIN_GESTURE_SCALE, MAX_GESTURE_SCALE);
+          } else {
+            targetGestureScale = 1.0;
+          }
+
+          statusBox.innerHTML =
+            `Gesture: ${isFist ? "Fist" : "Open hand"}　Scale: ${targetGestureScale.toFixed(2)}<br>` +
+            `${isFist ? "The closer to camera, the larger particles" : "Currently only rotation is active"}`;      
+        } else {
+          statusBox.classList.remove("active");
+          statusBox.textContent = "No gesture detected. Please put your hand in the camera view in the bottom right corner.";
+          targetGestureScale = 1.0;
+        }
+      });
+
+      const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => {
+          await hands.send({ image: videoElement });
+        },
+        width: 640,
+        height: 480
+      });
+
+      cameraUtils.start()
+        .then(() => {
+          statusBox.textContent = "Camera started. Please put your hand in front of the camera.";
+        })
+        .catch((err) => {
+          console.error(err);
+          loadingText.textContent = "Camera request failed: please grant camera permission and ensure the page is opened via localhost / 127.0.0.1.";
+          statusBox.textContent = "Camera failed to start. Particles can still be rotated with the mouse.";
+        });
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!particleSystem || !particleGeometry) return;
+
+      gestureScale += (targetGestureScale - gestureScale) * 0.12;
+
+      const actualScale = BASE_MODEL_SCALE * gestureScale;
+
+      particleSystem.rotation.y += (targetRotationY - particleSystem.rotation.y) * 0.05;
+      particleSystem.rotation.x += (targetRotationX - particleSystem.rotation.x) * 0.05;
+
+      const positions = particleGeometry.attributes.position.array;
+      const targetArray = targetPositions[currentModel];
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const i3 = i * 3;
+        positions[i3] += (targetArray[i3] * actualScale - positions[i3]) * 0.08;
+        positions[i3 + 1] += (targetArray[i3 + 1] * actualScale - positions[i3 + 1]) * 0.08;
+        positions[i3 + 2] += (targetArray[i3 + 2] * actualScale - positions[i3 + 2]) * 0.08;
+      }
+
+      particleGeometry.attributes.position.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function setupUI() {
+      const modelSelect = document.getElementById("model-select");
+      const colorInput = document.getElementById("particle-color");
+      const colorHex = document.getElementById("color-hex");
+      const minimizeBtn = document.getElementById("minimize-btn");
+      const uiPanel = document.querySelector(".ui-panel");
+      const fullscreenBtn = document.getElementById("btn-fullscreen");
+
+      const modelList = ["tree", "saturn", "heart", "cube", "dna"];
+
+      modelSelect.addEventListener("change", (e) => {
+        currentModel = e.target.value;
+      });
+
+      colorInput.addEventListener("input", (e) => {
+        const color = e.target.value;
+        colorHex.textContent = color;
+        document.documentElement.style.setProperty("--accent-color", color);
+        if (particleSystem) particleSystem.material.color.set(color);
+      });
+
+      fullscreenBtn.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+          fullscreenBtn.textContent = "Windowed Mode";
+        } else {
+          document.exitFullscreen();
+          fullscreenBtn.textContent = "Fullscreen Mode";
+        }
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) {
+          fullscreenBtn.textContent = "Fullscreen Mode";
+        } else {
+          fullscreenBtn.textContent = "Windowed Mode";
+        }
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          const currentIndex = modelList.indexOf(currentModel);
+          const nextIndex = (currentIndex - 1 + modelList.length) % modelList.length;
+          const nextModel = modelList[nextIndex];
+          currentModel = nextModel;
+          modelSelect.value = nextModel;
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          const currentIndex = modelList.indexOf(currentModel);
+          const nextIndex = (currentIndex + 1) % modelList.length;
+          const nextModel = modelList[nextIndex];
+          currentModel = nextModel;
+          modelSelect.value = nextModel;
+        }
+      });
+
+      minimizeBtn.addEventListener("click", () => {
+        uiPanel.classList.toggle("minimized");
+        minimizeBtn.textContent = uiPanel.classList.contains("minimized") ? "+" : "−";
+        minimizeBtn.title = uiPanel.classList.contains("minimized") ? "Maximize" : "Minimize";
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      initThree();
+      setupUI();
+      animate();
+      initWebcamAndAI();
+    });
+  </script>
+</body>
+</html>
